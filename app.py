@@ -61,12 +61,11 @@ if st.button("Analyze Now", type="primary", use_container_width=True):
             
             # Final Output
             st.divider()
-            if "1" in label or "SPAM" in label.upper():
-                st.error(f"### 🚨 SPAM DETECTED")
-                st.write(f"**Confidence:** {score:.1%}")
-            else:
-                st.success(f"### ✅ SAFE MESSAGE")
-                st.write(f"**Confidence:** {score:.1%}")
+            # Update your code to this:
+if label == "LABEL_0":
+    st.error("### 🚨 SPAM DETECTED")
+else:
+    st.success("### ✅ SAFE MESSAGE")
             
             with st.expander("Technical Data"):
                 st.json(result)
