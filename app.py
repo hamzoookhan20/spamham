@@ -1,71 +1,76 @@
 import streamlit as st
 from transformers import pipeline
 import os
-from pathlib import Path
 
 # --- 1. PAGE SETUP ---
 st.set_page_config(page_title="SpamGuard AI", page_icon="🛡️")
 
+# Custom UI for a professional MS-AI project look
+st.markdown("""
+    <style>
+    .stTextArea textarea { font-size: 1.1rem !important; }
+    .reportview-container { background: #f0f2f6; }
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
 st.title("🛡️ SpamGuard AI")
-st.caption("Developed by Muhammad Hamza • Qassim University")
+st.markdown("### Intelligent Spam & Phishing Detection System")
+st.caption("Researcher: Muhammad Hamza • Qassim University • MS in AI")
+st.divider()
 
-# --- 2. DEBUGGING / DIAGNOSTIC (Delete this section once it works) ---
-with st.expander("🔍 System Diagnostic (Check this if it fails)"):
-    st.write("Current Directory Files:", os.listdir("."))
-    if os.path.exists("spam_model"):
-        st.write("✅ 'spam_model' folder found.")
-        st.write("Files inside 'spam_model':", os.listdir("spam_model"))
-    else:
-        st.error("❌ 'spam_model' folder NOT found at root level.")
-
-# --- 3. MODEL LOADING ---
+# --- 2. MODEL LOADING ---
 @st.cache_resource
-def load_spam_model():
-    model_dir = "spam_model"
-    
-    # Check for the actual weight file before loading
-    weight_path = os.path.join(model_dir, "model.safetensors")
-    
-    if not os.path.exists(weight_path):
-        return None, "Weights file (model.safetensors) missing."
-
+def load_model():
+    model_path = "spam_model"
+    if not os.path.exists(model_path):
+        return None
     try:
-        # Load the model and tokenizer from the local folder
-        pipe = pipeline(
-            "text-classification",
-            model=model_dir,
-            tokenizer=model_dir,
-            device=-1  # Forces CPU
-        )
-        return pipe, "Success"
+        # Load pipeline (Ensure model.safetensors is in the 'spam_model' folder)
+        return pipeline("text-classification", model=model_path, tokenizer=model_path, device=-1)
     except Exception as e:
-        return None, str(e)
+        st.error(f"Load Error: {e}")
+        return None
 
-# Initialize
-classifier, message = load_spam_model()
+classifier = load_model()
 
-# --- 4. MAIN INTERFACE ---
-user_input = st.text_area("Paste Message Here:", height=150, placeholder="Enter text...")
+# --- 3. USER INPUT ---
+user_input = st.text_area("Paste the email or message content here:", height=200, placeholder="e.g., 'Dear user, your account has been locked...'")
 
-if st.button("Analyze Now", type="primary", use_container_width=True):
+# --- 4. PROCESSING LOGIC ---
+if st.button("🔍 Run AI Analysis", type="primary", use_container_width=True):
     if not user_input.strip():
-        st.warning("Please enter text first.")
+        st.warning("Please provide a message to analyze.")
     elif classifier is None:
-        st.error(f"Model Error: {message}")
-        st.info("Tip: Ensure your model files are in a folder named 'spam_model' on GitHub.")
+        st.error("Model files not found. Check if 'spam_model' folder exists at the root.")
     else:
-        with st.spinner("Classifying..."):
+        with st.spinner("Analyzing linguistic patterns..."):
+            # Get prediction
             result = classifier(user_input[:512])[0]
             label = result['label']
             score = result['score']
             
-            # Final Output
-            st.divider()
-            # Update your code to this:
-    if label == "LABEL_0":
-        st.error("### 🚨 SPAM DETECTED")
-    else:
-        st.success("### ✅ SAFE MESSAGE")
+            st.subheader("Analysis Results")
             
-            with st.expander("Technical Data"):
+            # --- THE "ALWAYS SAFE" FIX ---
+            # Most models use LABEL_1 for Spam and LABEL_0 for Ham. 
+            # If your testing shows they are flipped, change the "1" to "0" below.
+            is_spam = ("1" in label or "SPAM" in label.upper())
+
+            if is_spam:
+                st.error(f"### 🚨 Result: HIGH RISK (SPAM)")
+                st.metric("Spam Probability", f"{score:.1%}")
+                st.write("⚠️ **Warning:** This message contains patterns typical of phishing or unsolicited spam.")
+            else:
+                st.success(f"### ✅ Result: LOW RISK (SAFE)")
+                st.metric("Safety Confidence", f"{score:.1%}")
+                st.write("✔️ **Info:** No malicious intent or spam patterns were detected.")
+
+            # --- 5. TECHNICAL DATA (For Debugging) ---
+            with st.expander("Technical Metadata (Research View)"):
+                st.write("This section shows the raw output from your fine-tuned model.")
                 st.json(result)
+                st.info(f"Current detection logic: Spam = {label} (Targeting: LABEL_1)")
+
+st.divider()
+st.info("💡 **Researcher Tip:** If an obvious scam shows as 'SAFE', check the Technical Metadata. If it says 'LABEL_0', edit line 51 of this code to look for '0' instead of '1'.")
