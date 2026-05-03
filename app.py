@@ -19,13 +19,13 @@ def load_model():
         return None
     
     try:
-        # Load the classification pipeline
+        # Change this part in your load_model function:
         pipe = pipeline(
             "text-classification",
             model=str(model_path),
             tokenizer=str(model_path),
-            device=0 if torch.cuda.is_available() else -1
-        )
+            local_files_only=True  # This forces it to use YOUR files or fail
+)
         return pipe
     except Exception as e:
         st.error(f"Error loading model: {e}")
