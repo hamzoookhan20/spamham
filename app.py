@@ -58,7 +58,7 @@ if st.button("🔍 Analyze Message", type="primary", use_container_width=True):
                 # REVISED LOGIC: 
                 # Check for common naming conventions: 'LABEL_1', 'SPAM', or '1'
                 # Note: If your model treats LABEL_0 as spam, change this line.
-                is_spam = label in ['LABEL_1', 'SPAM', '1']
+                is_spam = label in ['LABEL_0', '0']
                 
                 st.divider()
                 
