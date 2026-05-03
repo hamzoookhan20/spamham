@@ -14,72 +14,75 @@ st.subheader("Intelligent Spam & Phishing Detector")
 def load_model():
     model_path = Path("spam_model")
     
+    # Check if directory exists
     if not model_path.exists():
-        st.error("❌ Model folder 'spam_model' not found! Please check your repository structure.")
+        st.error(f"❌ folder '{model_path}' not found at root.")
         return None
     
+    # Check if weight file exists inside folder
+    weight_file = model_path / "model.safetensors"
+    if not weight_file.exists():
+        st.error("❌ 'model.safetensors' missing from the folder! Check Git LFS.")
+        return None
+
     try:
-        # Change this part in your load_model function:
+        # Load pipeline
         pipe = pipeline(
             "text-classification",
             model=str(model_path),
             tokenizer=str(model_path),
-            local_files_only=True  # This forces it to use YOUR files or fail
-)
+            device=-1 # Forces CPU for stability on Streamlit Free Tier
+        )
         return pipe
     except Exception as e:
-        st.error(f"Error loading model: {e}")
+        st.error(f"Critical Error: {e}")
         return None
 
 model = load_model()
 
-# --- APP LOGIC ---
 if model is None:
-    st.warning("⚠️ Application is waiting for the model to load...")
     st.stop()
 
-# User Input
+# --- USER INTERFACE ---
 user_input = st.text_area(
     "Paste Email or SMS Message Here",
     height=200,
-    placeholder="Enter message to analyze (e.g., urgent prize notifications or work emails)..."
+    placeholder="Enter message to analyze..."
 )
+
+# Research Toggle: In case your labels are flipped (LABEL_0 vs LABEL_1)
+is_label_1_spam = st.sidebar.toggle("Is LABEL_1 Spam?", value=True)
 
 if st.button("🔍 Analyze Message", type="primary", use_container_width=True):
     if user_input.strip():
-        with st.spinner("Analyzing with DistilBERT..."):
+        with st.spinner("Analyzing..."):
             try:
-                # Get prediction (truncating to 512 tokens for model safety)
                 result = model(user_input[:512])[0]
-                
                 label = result['label'].upper()
-                confidence = result['score']
+                score = result['score']
                 
-                # REVISED LOGIC: 
-                # Check for common naming conventions: 'LABEL_1', 'SPAM', or '1'
-                # Note: If your model treats LABEL_0 as spam, change this line.
-                is_spam = label in ['LABEL_0', '0']
-                
+                # Dynamic Logic based on your sidebar selection
+                if is_label_1_spam:
+                    is_spam = "1" in label or "SPAM" in label
+                else:
+                    is_spam = "0" in label or "HAM" not in label # If 0 is spam
+
                 st.divider()
                 
                 if is_spam:
-                    st.error(f"### 🚨 SPAM / PHISHING DETECTED", icon="⚠️")
-                    st.write(f"**AI Confidence:** `{confidence:.1%}`")
-                    st.warning("**Recommended Action:** This message looks suspicious. Do not click links or share personal info.")
+                    st.error("### 🚨 SPAM DETECTED", icon="⚠️")
                 else:
-                    st.success(f"### ✅ This message appears safe", icon="✅")
-                    st.write(f"**AI Confidence:** `{confidence:.1%}`")
-
-                # Technical Debugging Section
-                with st.expander("Technical Details (Research Data)"):
-                    st.write(f"**Detected Label:** `{label}`")
+                    st.success("### ✅ MESSAGE SAFE", icon="✅")
+                
+                st.write(f"**Confidence:** `{score:.1%}`")
+                
+                with st.expander("Technical Research Data"):
                     st.json(result)
                     
             except Exception as e:
-                st.error(f"Analysis Error: {e}")
+                st.error(f"Analysis failed: {e}")
     else:
-        st.warning("Please enter some text first.")
+        st.warning("Please enter text.")
 
-# --- FOOTER ---
 st.markdown("---")
-st.caption("Developed by Muhammad Hamza • MS in AI • Qassim University")
+st.caption("Muhammad Hamza • Qassim University • MS AI")
