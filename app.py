@@ -5,72 +5,92 @@ import os
 # --- 1. PAGE SETUP ---
 st.set_page_config(page_title="SpamGuard AI", page_icon="🛡️")
 
-# Custom UI for a professional MS-AI project look
+# Custom Professional UI
 st.markdown("""
     <style>
-    .stTextArea textarea { font-size: 1.1rem !important; }
-    .reportview-container { background: #f0f2f6; }
+    .main { background-color: #f8f9fa; }
+    .stTextArea textarea { font-size: 1.1rem !important; border-radius: 10px; }
+    .stButton>button { border-radius: 20px; height: 3em; width: 100%; }
     footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🛡️ SpamGuard AI")
-st.markdown("### Intelligent Spam & Phishing Detection System")
+st.markdown("### Neural Spam Detection System")
 st.caption("Researcher: Muhammad Hamza • Qassim University • MS in AI")
 st.divider()
 
 # --- 2. MODEL LOADING ---
 @st.cache_resource
-def load_model():
-    model_path = "spam_model"
+def load_spam_model():
+    # Ensure your folder on GitHub is named exactly 'spam_model'
+    model_path = "spam_model" 
+    
     if not os.path.exists(model_path):
-        return None
+        return None, "Folder 'spam_model' not found."
+    
     try:
-        # Load pipeline (Ensure model.safetensors is in the 'spam_model' folder)
-        return pipeline("text-classification", model=model_path, tokenizer=model_path, device=-1)
+        # Loading the local fine-tuned weights
+        pipe = pipeline(
+            "text-classification", 
+            model=model_path, 
+            tokenizer=model_path, 
+            device=-1
+        )
+        return pipe, "Success"
     except Exception as e:
-        st.error(f"Load Error: {e}")
-        return None
+        return None, str(e)
 
-classifier = load_model()
+classifier, status_msg = load_spam_model()
 
-# --- 3. USER INPUT ---
-user_input = st.text_area("Paste the email or message content here:", height=200, placeholder="e.g., 'Dear user, your account has been locked...'")
+# --- 3. USER INTERFACE ---
+user_input = st.text_area(
+    "Analyze Message Content:", 
+    height=200, 
+    placeholder="Paste email, SMS, or chat text here to check for phishing patterns..."
+)
 
-# --- 4. PROCESSING LOGIC ---
-if st.button("🔍 Run AI Analysis", type="primary", use_container_width=True):
+if st.button("🚀 Analyze Now", type="primary"):
     if not user_input.strip():
-        st.warning("Please provide a message to analyze.")
+        st.warning("Please enter some text to analyze.")
     elif classifier is None:
-        st.error("Model files not found. Check if 'spam_model' folder exists at the root.")
+        st.error(f"Model Error: {status_msg}")
     else:
-        with st.spinner("Analyzing linguistic patterns..."):
-            # Get prediction
+        with st.spinner("Running deep learning inference..."):
+            # Get model prediction
             result = classifier(user_input[:512])[0]
             label = result['label']
             score = result['score']
             
-            st.subheader("Analysis Results")
+            # --- 4. FIXED LOGIC (Matching your LABEL_0 result) ---
+            # We check for LABEL_0 because your previous test confirmed it as the spam trigger.
+            is_spam = (label == "LABEL_0")
             
-            # --- THE "ALWAYS SAFE" FIX ---
-            # Most models use LABEL_1 for Spam and LABEL_0 for Ham. 
-            # If your testing shows they are flipped, change the "1" to "0" below.
-            is_spam = ("1" in label or "SPAM" in label.upper())
-
+            st.subheader("Classification Result")
+            
             if is_spam:
-                st.error(f"### 🚨 Result: HIGH RISK (SPAM)")
-                st.metric("Spam Probability", f"{score:.1%}")
-                st.write("⚠️ **Warning:** This message contains patterns typical of phishing or unsolicited spam.")
+                st.error("### 🚨 HIGH RISK: SPAM DETECTED")
+                col1, col2 = st.columns(2)
+                col1.metric("Detection Confidence", f"{score:.1%}")
+                col2.metric("Status", "Flagged")
+                st.write("🔍 **Analysis:** This message matches linguistic patterns found in phishing and fraudulent emails.")
             else:
-                st.success(f"### ✅ Result: LOW RISK (SAFE)")
-                st.metric("Safety Confidence", f"{score:.1%}")
-                st.write("✔️ **Info:** No malicious intent or spam patterns were detected.")
+                st.success("### ✅ LOW RISK: SAFE MESSAGE")
+                col1, col2 = st.columns(2)
+                col1.metric("Safety Confidence", f"{score:.1%}")
+                col2.metric("Status", "Verified")
+                st.write("🔍 **Analysis:** No malicious patterns detected. The message appears to be legitimate.")
 
-            # --- 5. TECHNICAL DATA (For Debugging) ---
-            with st.expander("Technical Metadata (Research View)"):
-                st.write("This section shows the raw output from your fine-tuned model.")
-                st.json(result)
-                st.info(f"Current detection logic: Spam = {label} (Targeting: LABEL_1)")
+            # --- 5. RESEARCHER DATA (Technical View) ---
+            with st.expander("📊 Technical Metadata (For MS-AI Research)"):
+                st.json({
+                    "model_output": label,
+                    "confidence_score": score,
+                    "model_path": "Local /spam_model/",
+                    "logic_applied": "LABEL_0 == SPAM"
+                })
+                if score < 0.60:
+                    st.warning("⚠️ **Note:** The model has low confidence in this result. Consider retrying with more text.")
 
 st.divider()
-st.info("💡 **Researcher Tip:** If an obvious scam shows as 'SAFE', check the Technical Metadata. If it says 'LABEL_0', edit line 51 of this code to look for '0' instead of '1'.")
+st.caption("© 2026 AI Research Lab - Built with Streamlit & Hugging Face Transformers")
