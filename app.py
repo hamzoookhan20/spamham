@@ -1,99 +1,126 @@
 import streamlit as st
 from transformers import pipeline
 import torch
+import os
 from pathlib import Path
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="SpamGuard AI", page_icon="🛡️", layout="wide")
 
-# Custom CSS for a cleaner look
+# Custom UI Styling
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stTextArea textarea { font-size: 1.1rem !important; }
-    .status-box { padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+    .main { background-color: #f8f9fa; }
+    .stTextArea textarea { font-size: 1.1rem !important; color: #1e1e1e; }
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- MODEL LOADING ---
+# --- MODEL LOADING WITH ERROR CHECKING ---
 @st.cache_resource
 def load_classifier():
     model_path = Path("spam_model")
+    
+    # 1. Check if folder exists
+    if not model_path.exists():
+        return None, f"Folder '{model_path}' not found. Please check GitHub structure."
+    
+    # 2. Check for essential files
+    required_files = ["config.json", "model.safetensors", "tokenizer_config.json"]
+    missing = [f for f in required_files if not (model_path / f).exists()]
+    if missing:
+        return None, f"Missing files in model folder: {', '.join(missing)}"
+
     try:
-        # We use the standard pipeline but specify the local path
+        # 3. Load the pipeline
         pipe = pipeline(
             "text-classification",
             model=str(model_path),
             tokenizer=str(model_path),
-            device=-1  # Use CPU for deployment stability
+            device=-1  # Force CPU for Streamlit Cloud stability
         )
-        return pipe
+        return pipe, "Success"
     except Exception as e:
-        st.error(f"Could not load model weights: {e}")
-        return None
+        return None, f"Pipeline Error: {str(e)}"
 
-classifier = load_classifier()
+# Initialize model
+classifier, model_status = load_classifier()
 
-# --- SIDEBAR / SETTINGS ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚙️ Model Settings")
-    st.info("This app uses a fine-tuned DistilBERT model to detect phishing and spam.")
-    
-    # This is the fix for your "LABEL_0" issue
-    # If your model trained LABEL_0 as Spam, toggle this OFF.
-    spam_label = st.selectbox("Which label is SPAM?", ["LABEL_1", "LABEL_0", "SPAM"], index=0)
+    st.title("🛡️ System Control")
+    if classifier:
+        st.success("✅ Model Status: Ready")
+    else:
+        st.error(f"❌ Model Status: {model_status}")
     
     st.divider()
-    st.caption("Developed by Muhammad Hamza\nQassim University • MS in AI")
+    st.subheader("Model Calibration")
+    # This allows you to toggle between labels if your model is inverted
+    spam_label = st.selectbox(
+        "Select the label that represents SPAM:",
+        options=["LABEL_1", "LABEL_0", "SPAM", "1"],
+        index=0,
+        help="Check 'Technical Metadata' after a scan to see which label your model uses for spam."
+    )
+    
+    st.divider()
+    st.caption("Muhammad Hamza • Qassim University • MS in AI")
 
 # --- MAIN INTERFACE ---
 st.title("🛡️ SpamGuard AI")
-st.write("Enter the content of an email or SMS below to analyze it for security risks.")
+st.markdown("### Intelligent Spam & Phishing Detection")
+st.write("Paste the message content below to analyze it using our fine-tuned DistilBERT model.")
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
     user_input = st.text_area(
-        "Message Content:",
+        "Enter Message:",
         height=250,
-        placeholder="Paste your email or SMS here...",
-        help="The AI performs best with English text under 512 words."
+        placeholder="e.g., 'Congratulations! You've won a $1000 gift card...'",
     )
     
-    analyze_btn = st.button("🔍 Run Security Scan", type="primary", use_container_width=True)
+    analyze_btn = st.button("🔍 Analyze Message", type="primary", use_container_width=True)
 
 with col2:
     st.subheader("Analysis Results")
-    if analyze_btn and user_input.strip():
-        with st.spinner("Analyzing patterns..."):
-            # Execute prediction
-            prediction = classifier(user_input[:512])[0]
-            label = prediction['label']
-            score = prediction['score']
-            
-            # Classification Logic
-            is_spam = (label == spam_label)
-            
-            if is_spam:
-                st.error("### 🚨 SPAM DETECTED")
-                st.progress(score, text=f"Spam Probability: {score:.1%}")
-                st.warning("**Recommendation:** Do not click links or provide personal data.")
-            else:
-                st.success("### ✅ MESSAGE SAFE")
-                st.progress(score, text=f"Safety Confidence: {score:.1%}")
-                st.info("**Analysis:** No common phishing patterns detected.")
-
-            # Research/Debug Data
-            with st.expander("View AI Metadata"):
-                st.write(f"Raw Label: `{label}`")
-                st.write(f"Confidence: `{score:.4f}`")
-                st.json(prediction)
     
-    elif analyze_btn:
-        st.warning("Please enter text to analyze.")
-    else:
-        st.write("Results will appear here after scanning.")
+    if analyze_btn:
+        if not user_input.strip():
+            st.warning("Please enter a message to scan.")
+        elif classifier is None:
+            st.error("The AI model is not loaded. Check the sidebar for details.")
+        else:
+            with st.spinner("AI is evaluating message patterns..."):
+                try:
+                    # Run prediction
+                    result = classifier(user_input[:512])[0]
+                    label = result['label'].upper()
+                    score = result['score']
+                    
+                    # Logic Check
+                    is_spam = (label == spam_label.upper())
+                    
+                    st.divider()
+                    
+                    if is_spam:
+                        st.error("### 🚨 HIGH RISK: SPAM", icon="⚠️")
+                        st.metric("Spam Confidence", f"{score:.1%}")
+                        st.warning("**Recommendation:** This message shows signs of phishing. Do not click links.")
+                    else:
+                        st.success("### ✅ LOW RISK: SAFE", icon="✅")
+                        st.metric("Safety Confidence", f"{score:.1%}")
+                        st.info("**Analysis:** This message appears to be legitimate.")
 
-# --- FOOTER ---
+                    # Technical Debugging
+                    with st.expander("Technical Metadata"):
+                        st.write(f"Detected Label: `{label}`")
+                        st.json(result)
+                        
+                except Exception as e:
+                    st.error(f"Analysis failed: {e}")
+    else:
+        st.info("Input a message and click 'Analyze' to see the security score.")
+
 st.divider()
-st.markdown("<center>Focused on Traffic Safety & Cybersecurity through Artificial Intelligence</center>", unsafe_allow_html=True)
